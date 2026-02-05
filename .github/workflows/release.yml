@@ -53,7 +53,7 @@ jobs:
         hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
         
         # Move release artifacts to workspace root for the release action
-        mv release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg ./
+        mv release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg MountBar.dmg
         mv release/MountBar.app ./
 
     - name: Generate changelog
@@ -79,7 +79,7 @@ jobs:
         name: MountBar ${{ steps.get_version.outputs.VERSION }}
         body_path: CHANGELOG.md
         files: |
-          MountBar-${{ steps.get_version.outputs.VERSION }}.dmg
+          MountBar.dmg
           MountBar.app
         draft: false
         prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
@@ -91,5 +91,5 @@ jobs:
       with:
         name: MountBar-${{ steps.get_version.outputs.VERSION }}
         path: |
-          MountBar-${{ steps.get_version.outputs.VERSION }}.dmg
+          MountBar.dmg
         retention-days: 30
