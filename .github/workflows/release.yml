@@ -33,7 +33,13 @@ jobs:
     - name: Build Release
       run: |
         cd src
-        xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        xcodebuild -project MountBar.xcodeproj \
+                   -scheme MountBar \
+                   -configuration Release \
+                   clean build \
+                   CODE_SIGN_IDENTITY="" \
+                   CODE_SIGNING_REQUIRED=NO \
+                   CODE_SIGNING_ALLOWED=NO
         
         # Create release directory
         mkdir -p release

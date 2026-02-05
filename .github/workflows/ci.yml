@@ -25,7 +25,14 @@ jobs:
     - name: Build
       run: |
         cd src
-        xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        xcodebuild -project MountBar.xcodeproj \
+                   -scheme MountBar \
+                   -configuration Release \
+                   clean build \
+                   CODE_SIGN_IDENTITY="" \
+                   CODE_SIGNING_REQUIRED=NO \
+                   CODE_SIGNING_ALLOWED=NO \
+                   OTHER_CODE_SIGN_FLAGS="--deep --force"
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
