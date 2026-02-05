@@ -20,7 +20,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       actions: read  # for github/codeql-action/init to get workflow details
       contents: read  # for actions/checkout to fetch code
