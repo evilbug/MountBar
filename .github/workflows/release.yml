@@ -52,9 +52,21 @@ jobs:
         # Create DMG
         hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
         
+        # Debug: List files before moving
+        echo "Contents of release/ directory:"
+        ls -la release/
+        
         # Move release artifacts to workspace root for the release action
-        mv release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg MountBar.dmg
+        mv "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg" MountBar.dmg || {
+          echo "Failed to move DMG file"
+          ls -la "release/"
+          exit 1
+        }
         mv release/MountBar.app ./
+        
+        # Debug: Verify files were moved correctly
+        echo "Contents of workspace root after moving:"
+        ls -la
 
     - name: Generate changelog
       id: changelog
