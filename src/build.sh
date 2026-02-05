@@ -10,6 +10,11 @@ echo "🧹 Cleaning Xcode caches..."
 rm -rf ~/Library/Developer/Xcode/DerivedData/MountBar-*
 rm -rf ~/Library/Caches/com.apple.dt.Xcode/
 
+# Clean release folder
+echo "🧹 Cleaning release folder..."
+rm -rf "$(dirname "$0")/release"
+mkdir -p "$(dirname "$0")/release"
+
 # Generate fresh icons from source
 echo "🎨 Generating app icons..."
 "$(dirname "$0")/../scripts/generate_icons.sh"
@@ -30,8 +35,8 @@ fi
 
 echo "✅ Build successful!"
 
-# Copy app to Desktop
-echo "📋 Copying app to Desktop..."
+# Copy app to release folder
+echo "📋 Copying app to release folder..."
 cp -R "/Users/iago/Library/Developer/Xcode/DerivedData/MountBar-"*"/Build/Products/Release/MountBar.app" "release/MountBar.app"
 
 if [ $? -ne 0 ]; then
@@ -39,7 +44,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "✅ App copied to Desktop!"
+echo "✅ App copied to release folder!"
 
 # Create DMG
 echo "💿 Creating DMG installer..."
@@ -53,12 +58,12 @@ fi
 echo "✅ DMG created!"
 
 # Get file sizes
-APP_SIZE=$(du -h "/Users/iago/Desktop/MountBar.app" | cut -f1)
-DMG_SIZE=$(du -h "/Users/iago/Desktop/MountBar.dmg" | cut -f1)
+APP_SIZE=$(du -h "$(dirname "$0")/release/MountBar.app" | cut -f1)
+DMG_SIZE=$(du -h "$(dirname "$0")/release/MountBar.dmg" | cut -f1)
 
 echo ""
 echo "🎉 Build completed successfully!"
-echo "📁 Check your Desktop for:"
+echo "📁 Check the release folder for:"
 echo "   • MountBar.app ($APP_SIZE)"
 echo "   • MountBar.dmg ($DMG_SIZE)"
 echo ""

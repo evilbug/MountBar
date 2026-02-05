@@ -5,7 +5,9 @@
 [![Version](https://img.shields.io/github/v/release/evilbug/MountBar)](https://github.com/evilbug/MountBar/releases)
 [![License](https://img.shields.io/github/license/evilbug/MountBar)](LICENSE)
 
-A secure macOS menu bar application for managing and automatically mounting SMB network shares.
+
+![App Icon](icon/app_icon_rounded.png){ width=200 }
+A macOS menu bar application for managing and automatically mounting SMB network shares.
 
 ## Features
 
@@ -70,7 +72,7 @@ The built app will be in `build/Release/MountBar.app`
 
 ### Adding a New Mount
 
-1. Launch the app - it will appear in your menu bar with a server rack icon (📁 fallback)
+1. Launch the app - it will appear in your menu bar with a server rack icon
 2. Click the menu bar icon to open the popover
 3. Click "Add Volume" to add a new SMB mount
 4. Fill in the form with your SMB server details:
@@ -167,80 +169,6 @@ This project uses GitHub Actions for continuous integration and deployment:
 | **Release** | Tag push (v*.*.*) | Build, sign, create DMG, GitHub release |
 | **Manual Bump** | Workflow dispatch | Semantic version bump via UI |
 
-### Semantic Versioning
-
-We follow [Semantic Versioning](https://semver.org/):
-- `v1.2.3` - MAJOR.MINOR.PATCH
-- `v1.2.3-beta.1` - Pre-release versions
-
-### Creating a Release
-
-**Option 1: Local Script**
-```bash
-./scripts/bump-version.sh patch  # or: minor, major, pre, release
-```
-
-**Option 2: GitHub Actions**
-1. Go to Actions → "Manual Version Bump"
-2. Select bump type
-3. Run workflow
-
-**Option 3: Manual Tag**
-```bash
-git tag -a v1.0.0 -m "Release 1.0.0"
-git push origin v1.0.0
-```
-
-The release workflow automatically:
-- Builds the app
-- Creates a signed DMG
-- Generates changelog from commits
-- Creates GitHub release with artifacts
-
-## Development
-
-### Setup
-
-```bash
-git clone https://github.com/evilbug/MountBar.git
-cd MountBar
-```
-
-### Build
-
-```bash
-cd src
-xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release
-```
-
-### Test
-
-```bash
-cd src
-xcodebuild test -project MountBar.xcodeproj -scheme MountBar
-```
-
-### Security Scan
-
-```bash
-# Install SwiftLint if needed
-brew install swiftlint
-swiftlint
-```
-
-## Security Considerations
-
-### What We Protect Against
-
-| Threat | Mitigation |
-|--------|-----------|
-| Credential theft in logs | Passwords passed via stdin, not logged |
-| Process argument exposure | No passwords in command-line args |
-| Keychain prompt fatigue | `AfterFirstUnlockThisDeviceOnly` access |
-| Path traversal | Symlink resolution + path validation |
-| Command injection | Input validation on server/share names |
-| Memory dumps | Secure memory clearing for root key |
-| Weak random keys | `SecRandomCopyBytes` for key generation |
 
 ### Permissions
 
@@ -259,14 +187,6 @@ MountBar requires these entitlements:
 | Keychain prompts | First launch only; won't prompt again until reboot |
 | Stale mounts | App auto-cleans stale mount points |
 | Network unavailable | Auto-mount continuously retries when network returns |
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Security Reports
-
-Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/evilbug/MountBar/security/advisories/new).
 
 ## License
 
