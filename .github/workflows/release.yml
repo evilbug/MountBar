@@ -57,12 +57,16 @@ jobs:
         ls -la release/
         
         # Move release artifacts to workspace root for the release action
-        mv "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg" MountBar.dmg || {
+        cd ..  # Move back to the root directory
+        
+        # The DMG is already in the release/ directory, just rename it
+        mv "src/release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg" MountBar.dmg || {
           echo "Failed to move DMG file"
-          ls -la "release/"
+          ls -la "src/release/"
           exit 1
         }
-        mv release/MountBar.app ./
+        # Move the app bundle to the root
+        mv "src/release/MountBar.app" ./
         
         # Debug: Verify files were moved correctly
         echo "Contents of workspace root after moving:"
