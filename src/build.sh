@@ -5,6 +5,20 @@ echo "🔨 Building MountBar..."
 # Navigate to project directory
 cd "$(dirname "$0")"
 
+# Clean Xcode caches to ensure fresh assets
+echo "🧹 Cleaning Xcode caches..."
+rm -rf ~/Library/Developer/Xcode/DerivedData/MountBar-*
+rm -rf ~/Library/Caches/com.apple.dt.Xcode/
+
+# Generate fresh icons from source
+echo "🎨 Generating app icons..."
+"$(dirname "$0")/../scripts/generate_icons.sh"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Icon generation failed!"
+    exit 1
+fi
+
 # Clean and build release version
 echo "📦 Building release version..."
 xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build
