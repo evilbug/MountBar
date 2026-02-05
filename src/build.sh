@@ -1,0 +1,70 @@
+#!/bin/bash
+
+echo "🔨 Building MountBar..."
+
+# Navigate to project directory
+cd "$(dirname "$0")"
+
+# Clean Xcode caches to ensure fresh assets
+echo "🧹 Cleaning Xcode caches..."
+rm -rf ~/Library/Developer/Xcode/DerivedData/MountBar-*
+rm -rf ~/Library/Caches/com.apple.dt.Xcode/
+
+# Clean release folder
+echo "🧹 Cleaning release folder..."
+rm -rf "$(dirname "$0")/release"
+mkdir -p "$(dirname "$0")/release"
+
+# Generate fresh icons from source
+echo "🎨 Generating app icons..."
+"$(dirname "$0")/../scripts/generate_icons.sh"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Icon generation failed!"
+    exit 1
+fi
+
+# Clean and build release version
+echo "📦 Building release version..."
+xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build
+
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed!"
+    exit 1
+fi
+
+echo "✅ Build successful!"
+
+# Copy app to release folder
+echo "📋 Copying app to release folder..."
+cp -R "/Users/iago/Library/Developer/Xcode/DerivedData/MountBar-"*"/Build/Products/Release/MountBar.app" "release/MountBar.app"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to copy app!"
+    exit 1
+fi
+
+echo "✅ App copied to release folder!"
+
+# Create DMG
+echo "💿 Creating DMG installer..."
+hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO release/MountBar.dmg
+
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to create DMG!"
+    exit 1
+fi
+
+echo "✅ DMG created!"
+
+# Get file sizes
+APP_SIZE=$(du -h "$(dirname "$0")/release/MountBar.app" | cut -f1)
+DMG_SIZE=$(du -h "$(dirname "$0")/release/MountBar.dmg" | cut -f1)
+
+echo ""
+echo "🎉 Build completed successfully!"
+echo "📁 Check the release folder for:"
+echo "   • MountBar.app ($APP_SIZE)"
+echo "   • MountBar.dmg ($DMG_SIZE)"
+echo ""
+echo "🚀 Ready for distribution!"

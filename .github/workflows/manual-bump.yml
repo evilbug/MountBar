@@ -1,0 +1,137 @@
+name: Manual Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - pre
+          - release
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Get latest tag
+      id: get_version
+      run: |
+        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "current=$CURRENT_TAG" >> $GITHUB_OUTPUT
+        echo "Current version: $CURRENT_TAG"
+
+    - name: Calculate new version
+      id: calculate_version
+      run: |
+        CURRENT=${{ steps.get_version.outputs.current }}
+        CURRENT=${CURRENT#v}
+        BUMP_TYPE=${{ github.event.inputs.bump_type }}
+        
+        # Split version
+        IFS='.' read -r major minor patch <<< "$CURRENT"
+        IFS='-' read -r patch prerelease <<< "$patch"
+        
+        case $BUMP_TYPE in
+          major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            prerelease=""
+            ;;
+          minor)
+            minor=$((minor + 1))
+            patch=0
+            prerelease=""
+            ;;
+          patch)
+            patch=$((patch + 1))
+            prerelease=""
+            ;;
+          pre)
+            if [ -z "$prerelease" ]; then
+              patch=$((patch + 1))
+              prerelease="beta.1"
+            else
+              prenum=${prerelease##*.}
+              prename=${prerelease%.*}
+              prenum=$((prenum + 1))
+              prerelease="${prename}.${prenum}"
+            fi
+            ;;
+          release)
+            prerelease=""
+            ;;
+        esac
+        
+        if [ -n "$prerelease" ]; then
+          NEW_VERSION="v${major}.${minor}.${patch}-${prerelease}"
+        else
+          NEW_VERSION="v${major}.${minor}.${patch}"
+        fi
+        
+        echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+
+    - name: Update version files
+      run: |
+        NEW_VERSION=${{ steps.calculate_version.outputs.new }}
+        VERSION=${NEW_VERSION#v}
+        
+        # Update Info.plist
+        if [ -f "src/MountBar/Info.plist" ]; then
+          # Try to use PlistBuddy if available (macOS), otherwise use sed
+          if command -v /usr/libexec/PlistBuddy &> /dev/null; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" src/MountBar/Info.plist 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" src/MountBar/Info.plist 2>/dev/null || true
+          fi
+        fi
+        
+        # Update VERSION file
+        echo "$VERSION" > VERSION
+
+    - name: Commit and tag
+      run: |
+        NEW_VERSION=${{ steps.calculate_version.outputs.new }}
+        
+        git add -A
+        git commit -m "chore: bump version to $NEW_VERSION" || true
+        git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+        git push origin HEAD
+        git push origin "$NEW_VERSION"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.calculate_version.outputs.new }}
+        name: MountBar ${{ steps.calculate_version.outputs.new }}
+        draft: false
+        prerelease: ${{ contains(steps.calculate_version.outputs.new, 'alpha') || contains(steps.calculate_version.outputs.new, 'beta') || contains(steps.calculate_version.outputs.new, 'rc') }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Summary
+      run: |
+        echo "## Version Bump Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Old Version:** ${{ steps.get_version.outputs.current }}" >> $GITHUB_STEP_SUMMARY
+        echo "**New Version:** ${{ steps.calculate_version.outputs.new }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Bump Type:** ${{ github.event.inputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
