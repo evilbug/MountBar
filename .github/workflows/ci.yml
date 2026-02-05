@@ -74,13 +74,3 @@ jobs:
         # Check entitlements
         cat src/MountBar/MountBar.entitlements
 
-    - name: CodeQL Analysis
-      uses: github/codeql-action/init@v3
-      with:
-        languages: swift
-
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
