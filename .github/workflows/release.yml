@@ -33,9 +33,11 @@ jobs:
     - name: Build Release
       run: |
         cd src
+        # Build with custom build directory
         xcodebuild -project MountBar.xcodeproj \
                    -scheme MountBar \
                    -configuration Release \
+                   -derivedDataPath build_output \
                    clean build \
                    CODE_SIGN_IDENTITY="" \
                    CODE_SIGNING_REQUIRED=NO \
@@ -44,8 +46,8 @@ jobs:
         # Create release directory
         mkdir -p release
         
-        # Copy app to release
-        cp -R build/Release/MountBar.app release/
+        # Copy app to release (using the custom build output path)
+        cp -R build_output/Build/Products/Release/MountBar.app release/
         
         # Create DMG
         hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
