@@ -3,7 +3,7 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_ICON="$SCRIPT_DIR/icon/app_icon.png"
 APPICONSET_DIR="$SCRIPT_DIR/src/MountBar/Assets.xcassets/AppIcon.appiconset"
 
