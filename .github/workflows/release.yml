@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Update version in project
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        # Update Info.plist version
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" src/MountBar/Info.plist || true
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" src/MountBar/Info.plist || true
+
+    - name: Build Release
+      run: |
+        cd src
+        xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        
+        # Create release directory
+        mkdir -p release
+        
+        # Copy app to release
+        cp -R build/Release/MountBar.app release/
+        
+        # Create DMG
+        hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        
+        # Get the previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "Changes since $PREVIOUS_TAG:"
+          git log --pretty=format:"- %s (%h)" "$PREVIOUS_TAG"..HEAD | grep -v "Merge" || echo "No changes"
+        else
+          echo "Initial release"
+        fi > CHANGELOG.md
+        
+        cat CHANGELOG.md
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: MountBar ${{ steps.get_version.outputs.VERSION }}
+        body_path: CHANGELOG.md
+        files: |
+          src/release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg
+          src/release/MountBar.app
+        draft: false
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MountBar-${{ steps.get_version.outputs.VERSION }}
+        path: |
+          src/release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg
+        retention-days: 30

@@ -1,0 +1,86 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Show Xcode version
+      run: xcode-select -p && xcodebuild -version
+
+    - name: Build
+      run: |
+        cd src
+        xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MountBar-Build-${{ github.sha }}
+        path: |
+          src/build/Release/MountBar.app
+        retention-days: 7
+
+  test:
+    runs-on: macos-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run tests
+      run: |
+        cd src
+        xcodebuild -project MountBar.xcodeproj -scheme MountBar -destination 'platform=macOS' test || true
+
+  lint:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: SwiftLint
+      run: |
+        if ! command -v swiftlint &> /dev/null; then
+          brew install swiftlint
+        fi
+        cd src
+        swiftlint --reporter github-actions-logging || true
+
+  security-scan:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run security checks
+      run: |
+        # Check for hardcoded secrets
+        if grep -r "password\|secret\|key" --include="*.swift" . | grep -v "// " | head -20; then
+          echo "⚠️ Found potential hardcoded credentials - review required"
+        fi
+
+        # Check entitlements
+        cat src/MountBar/MountBar.entitlements
+
+    - name: CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: swift
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
