@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/evilbug/MountBar)](LICENSE)
 
 
-![App Icon](icon/app_icon_rounded.png){ width=200 }
+![App Icon](icon/app_icon_rounded_medium.png)
 A macOS menu bar application for managing and automatically mounting SMB network shares.
 
 ## Features
