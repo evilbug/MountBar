@@ -187,6 +187,7 @@ MountBar requires these entitlements:
 | Keychain prompts | First launch only; won't prompt again until reboot |
 | Stale mounts | App auto-cleans stale mount points |
 | Network unavailable | Auto-mount continuously retries when network returns |
+| **"App is damaged" error** | This is a macOS Gatekeeper quarantine issue. Fix it by running: <br>`xattr -cr /path/to/MountBar.app` <br>or <br>`sudo xattr -cr /path/to/MountBar.app` <br>This removes quarantine attributes that macOS adds to downloaded apps. |
 
 ## License
 

@@ -46,6 +46,10 @@ fi
 
 echo "✅ App copied to release folder!"
 
+# Strip quarantine attributes (fix "damaged" error)
+echo "🔓 Removing quarantine attributes..."
+xattr -cr "release/MountBar.app"
+
 # Create DMG
 echo "💿 Creating DMG installer..."
 hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO release/MountBar.dmg
@@ -57,7 +61,9 @@ fi
 
 echo "✅ DMG created!"
 
-# Get file sizes
+# Strip quarantine from DMG as well
+echo "🔓 Removing quarantine from DMG..."
+xattr -cr "release/MountBar.dmg"
 APP_SIZE=$(du -h "$(dirname "$0")/release/MountBar.app" | cut -f1)
 DMG_SIZE=$(du -h "$(dirname "$0")/release/MountBar.dmg" | cut -f1)
 

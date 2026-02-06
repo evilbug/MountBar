@@ -33,6 +33,11 @@ jobs:
     - name: Build Release
       run: |
         cd src
+        
+        # Generate fresh icons from source
+        echo "🎨 Generating app icons..."
+        ../scripts/generate_icons.sh
+        
         # Build with custom build directory
         xcodebuild -project MountBar.xcodeproj \
                    -scheme MountBar \
@@ -49,8 +54,16 @@ jobs:
         # Copy app to release (using the custom build output path)
         cp -R build_output/Build/Products/Release/MountBar.app release/
         
+        # Strip quarantine attributes (fix "damaged" error)
+        echo "🔓 Removing quarantine attributes..."
+        xattr -cr release/MountBar.app
+        
         # Create DMG
         hdiutil create -volname "MountBar" -srcfolder release/MountBar.app -ov -format UDZO "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
+        
+        # Strip quarantine from DMG as well
+        echo "🔓 Removing quarantine from DMG..."
+        xattr -cr "release/MountBar-${{ steps.get_version.outputs.VERSION }}.dmg"
         
         # Debug: List files before moving
         echo "Contents of release/ directory:"
