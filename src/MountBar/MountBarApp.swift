@@ -14,9 +14,14 @@ struct MountBarApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
+    private var mountManager = SMBMountManager()
+    private var mountDaemon = MountDaemon.shared
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         PasswordManager.shared.requestKeychainAccess()
+        
+        // Start auto-mount timer immediately
+        mountDaemon.start(with: mountManager)
         
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
@@ -33,7 +38,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover?.contentSize = NSSize(width: 300, height: 400)
         popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: MenuBarView())
+        popover?.contentViewController = NSHostingController(rootView: MenuBarView(mountManager: mountManager, mountDaemon: mountDaemon))
+        
+        // Listen for app deactivation to close popover
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidDeactivate),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
         
         print("✅ MountBar menu bar item created successfully")
         print("👀 Look for the drive icon in your top-right menu bar")
@@ -49,5 +62,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+    
+    @objc func appDidDeactivate() {
+        popover?.performClose(nil)
     }
 }

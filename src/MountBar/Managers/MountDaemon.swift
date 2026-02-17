@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import CFNetwork
+import AppKit
 
 class MountDaemon: ObservableObject {
     static let shared = MountDaemon()
@@ -10,6 +12,43 @@ class MountDaemon: ObservableObject {
     private var timer: Timer?
     private var mountManager: SMBMountManager?
     private let fileManager = FileManager.default
+
+    private func resolveHostname(_ hostname: String) -> String {
+        let host = CFHostCreateWithName(nil, hostname as CFString).takeRetainedValue()
+        var resolved = DarwinBoolean(false)
+        CFHostStartInfoResolution(host, .addresses, nil)
+        guard let addresses = CFHostGetAddressing(host, &resolved)?.takeUnretainedValue() as? [Data], resolved.boolValue else {
+            print("⚠️ DNS resolution failed for \(hostname), using original")
+            return hostname
+        }
+        for addrData in addresses {
+            let result = addrData.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) -> String? in
+                let sa = ptr.baseAddress!.assumingMemoryBound(to: sockaddr.self)
+                if sa.pointee.sa_family == UInt8(AF_INET) {
+                    var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                    var addr = ptr.load(as: sockaddr_in.self)
+                    inet_ntop(AF_INET, &addr.sin_addr, &buf, socklen_t(INET_ADDRSTRLEN))
+                    return String(cString: buf)
+                } else if sa.pointee.sa_family == UInt8(AF_INET6) {
+                    var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                    var addr = ptr.load(as: sockaddr_in6.self)
+                    inet_ntop(AF_INET6, &addr.sin6_addr, &buf, socklen_t(INET6_ADDRSTRLEN))
+                    return String(cString: buf)
+                }
+                return nil
+            }
+            if let ip = result {
+                print("🌐 Resolved \(hostname) -> \(ip)")
+                return ip
+            }
+        }
+        print("⚠️ DNS resolution returned no usable addresses for \(hostname), using original")
+        return hostname
+    }
+
+    private func expandMountPoint(_ mountPoint: String) -> String {
+        return NSString(string: mountPoint).expandingTildeInPath
+    }
     
     private init() {}
     
@@ -107,169 +146,107 @@ class MountDaemon: ObservableObject {
         }
     }
     
+    private func volumePath(for mount: SMBMount) -> String {
+        return "/Volumes/\(mount.shareName)"
+    }
+
     private func checkIfMounted(_ mount: SMBMount) -> Bool {
-        let expandedPath = NSString(string: mount.mountPoint).expandingTildeInPath
-        
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/sbin/mount")
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                for line in output.components(separatedBy: "\n") {
-                    if line.contains(expandedPath) && line.contains("smbfs") {
-                        return true
-                    }
-                }
-            }
-        } catch {
-            print("❌ Error checking mount status: \(error)")
-        }
-        
-        return false
+        let mountPath = volumePath(for: mount)
+        return fileManager.fileExists(atPath: mountPath)
     }
     
     private func performMount(_ mount: SMBMount, password: String) -> (Bool, String) {
-        let expandedPath = NSString(string: mount.mountPoint).expandingTildeInPath
-        
-        guard let homeDir = fileManager.homeDirectoryForCurrentUser.path as String? else {
-            let errorMsg = "Could not determine user home directory"
+        let resolvedServer = resolveHostname(mount.serverAddress)
+
+        var userAllowed = CharacterSet.urlUserAllowed
+        userAllowed.remove(charactersIn: "@:;")
+        let encodedUsername = mount.username.addingPercentEncoding(withAllowedCharacters: userAllowed) ?? mount.username
+
+        var passwordAllowed = CharacterSet.urlPasswordAllowed
+        passwordAllowed.remove(charactersIn: "@:")
+        let encodedPassword = password.addingPercentEncoding(withAllowedCharacters: passwordAllowed) ?? password
+        let encodedShare = mount.shareName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? mount.shareName
+
+        let smbURLString = "smb://\(encodedUsername):\(encodedPassword)@\(resolvedServer)/\(encodedShare)"
+        let smbURLRedacted = "smb://\(encodedUsername):***@\(resolvedServer)/\(encodedShare)"
+        print("🔌 Opening \(smbURLRedacted) silently via Finder")
+
+        guard let smbURL = URL(string: smbURLString) else {
+            let errorMsg = "Invalid SMB URL"
             print("❌ \(errorMsg)")
             return (false, errorMsg)
         }
-        
-        if !expandedPath.hasPrefix(homeDir) {
-            let errorMsg = "Mount point must be within user home directory (\(homeDir)). Current path: \(expandedPath)"
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var openError: Error?
+
+        DispatchQueue.main.async {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            config.hides = true
+            config.addsToRecentItems = false
+
+            NSWorkspace.shared.open([smbURL], withApplicationAt: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"), configuration: config) { _, error in
+                openError = error
+                semaphore.signal()
+            }
+        }
+
+        semaphore.wait()
+
+        if let error = openError {
+            let errorMsg = "Failed to open SMB URL: \(error.localizedDescription)"
             print("❌ \(errorMsg)")
             return (false, errorMsg)
         }
-        
-        // Canonicalize path to prevent traversal
-        let resolvedPath = (expandedPath as NSString).resolvingSymlinksInPath
-        let resolvedHome = (homeDir as NSString).resolvingSymlinksInPath
-        if !resolvedPath.hasPrefix(resolvedHome) {
-            let errorMsg = "Mount point resolved outside home directory"
-            print("❌ \(errorMsg): \(resolvedPath)")
-            return (false, errorMsg)
-        }
-        
-        if fileManager.fileExists(atPath: expandedPath) {
-            print("⚠️ Mount point already exists at \(expandedPath), attempting to unmount and clean up")
-            _ = performUnmount(mount)
-            Thread.sleep(forTimeInterval: 0.5)
-            
-            do {
-                try fileManager.removeItem(atPath: expandedPath)
-                print("🗑️ Removed existing mount point directory")
-            } catch {
-                print("⚠️ Could not remove existing directory: \(error.localizedDescription)")
-            }
-        }
-        
-        let parentPath = (expandedPath as NSString).deletingLastPathComponent
-        if !fileManager.fileExists(atPath: parentPath) {
-            do {
-                try fileManager.createDirectory(atPath: parentPath, withIntermediateDirectories: true, attributes: nil)
-                print("📁 Created parent directory: \(parentPath)")
-            } catch {
-                let errorMsg = "Failed to create parent directory \(parentPath): \(error.localizedDescription)"
-                print("❌ \(errorMsg)")
-                return (false, errorMsg)
-            }
-        }
-        
-        do {
-            try fileManager.createDirectory(atPath: expandedPath, withIntermediateDirectories: false, attributes: nil)
-            print("📁 Created mount point: \(expandedPath)")
-        } catch {
-            let errorMsg = "Failed to create mount point \(expandedPath): \(error.localizedDescription)"
-            print("❌ \(errorMsg)")
-            return (false, errorMsg)
-        }
-        
-        let smbURL = "//\(mount.username)@\(mount.serverAddress)/\(mount.shareName)"
-        
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/sbin/mount_smbfs")
-        process.arguments = ["-N", smbURL, expandedPath]
-        
-        // Pass password via stdin using echo pipe (avoids command-line exposure)
-        let inputPipe = Pipe()
-        process.standardInput = inputPipe
-        if let passwordData = (password + "\n").data(using: .utf8) {
-            inputPipe.fileHandleForWriting.write(passwordData)
-            try? inputPipe.fileHandleForWriting.close()
-        }
-        
-        let errorPipe = Pipe()
-        let outputPipe = Pipe()
-        process.standardError = errorPipe
-        process.standardOutput = outputPipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            
-            if process.terminationStatus != 0 {
-                var errorMessage = "Unknown error"
-                if let errorOutput = String(data: errorData, encoding: .utf8), !errorOutput.isEmpty {
-                    errorMessage = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                print("❌ Mount failed for \(mount.name): \(errorMessage)")
-                return (false, errorMessage)
-            }
-            
+
+        print("📋 Finder open succeeded, waiting for mount to appear...")
+
+        let volumesPath = "/Volumes/\(mount.shareName)"
+        var mounted = false
+        for i in 1...20 {
             Thread.sleep(forTimeInterval: 1.0)
-            
-            let volumeExists = fileManager.fileExists(atPath: expandedPath)
-            
-            if volumeExists {
-                print("✅ Successfully mounted: \(mount.name) at \(expandedPath)")
-                return (true, "")
-            } else {
-                let errorMsg = "Mount command succeeded but volume not found at \(expandedPath)"
-                print("❌ \(errorMsg) for \(mount.name)")
-                return (false, errorMsg)
+            if fileManager.fileExists(atPath: volumesPath) {
+                print("📋 Mount appeared at \(volumesPath) after \(i)s")
+                mounted = true
+                break
             }
-        } catch {
-            let errorMsg = "Error mounting \(mount.name): \(error.localizedDescription)"
-            print("❌ \(errorMsg)")
+        }
+
+        if !mounted {
+            let errorMsg = "Mount did not appear at \(volumesPath) within 20 seconds"
+            print("❌ \(errorMsg) for \(mount.name)")
             return (false, errorMsg)
         }
+
+        print("✅ Successfully mounted: \(mount.name) at \(volumesPath)")
+        return (true, "")
     }
     
     private func performUnmount(_ mount: SMBMount) -> Bool {
-        let volumePath = NSString(string: mount.mountPoint).expandingTildeInPath
-        
+        let path = volumePath(for: mount)
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
-        process.arguments = ["unmount", volumePath]
-        
+        process.arguments = ["unmount", path]
+
         let pipe = Pipe()
         process.standardError = pipe
-        
+
         do {
             try process.run()
             process.waitUntilExit()
-            
+
             if process.terminationStatus == 0 {
                 print("✅ Successfully unmounted: \(mount.name)")
                 return true
-            } else {
-                let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let errorOutput = String(data: errorData, encoding: .utf8) {
-                    print("❌ Unmount failed for \(mount.name): \(errorOutput)")
-                }
-                return false
             }
+
+            let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let errorOutput = String(data: errorData, encoding: .utf8) {
+                print("❌ Unmount failed for \(mount.name): \(errorOutput)")
+            }
+            return false
         } catch {
             print("❌ Error unmounting \(mount.name): \(error)")
             return false

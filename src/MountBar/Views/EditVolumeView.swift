@@ -10,7 +10,6 @@ struct EditVolumeView: View {
     @State private var shareName: String
     @State private var username: String
     @State private var password: String
-    @State private var mountPoint: String
     @State private var autoMount: Bool
     @State private var showingDeleteAlert = false
     @State private var isLoaded = false
@@ -25,8 +24,8 @@ struct EditVolumeView: View {
         _serverAddress = State(initialValue: mount.serverAddress)
         _shareName = State(initialValue: mount.shareName)
         _username = State(initialValue: mount.username)
-        _mountPoint = State(initialValue: mount.mountPoint)
         _autoMount = State(initialValue: mount.autoMount)
+
         
         let savedPassword = PasswordManager.shared.getPassword(from: mount) ?? ""
         _password = State(initialValue: savedPassword)
@@ -72,16 +71,7 @@ struct EditVolumeView: View {
                     
                     SecureField("Password", text: $password)
                         .textFieldStyle(.roundedBorder)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Mount Point", text: $mountPoint, prompt: Text("~/SMBMounts/\(shareName.isEmpty ? "sharename" : shareName)"))
-                            .textFieldStyle(.roundedBorder)
-                            .onChange(of: mountPoint) { _ in validateMountPoint() }
-                        if let error = validationErrors["mountPoint"] {
-                            Text(error).font(.caption).foregroundColor(.red)
-                        }
-                    }
-                    
+
                     Toggle("Auto-mount", isOn: $autoMount)
                 }
             }
@@ -123,7 +113,6 @@ struct EditVolumeView: View {
         !name.isEmpty && !serverAddress.isEmpty && !shareName.isEmpty && !username.isEmpty && !password.isEmpty &&
         InputValidator.validateServerAddress(serverAddress) &&
         InputValidator.validateShareName(shareName) &&
-        InputValidator.validateMountPoint(mountPoint.isEmpty ? "~/SMBMounts/\(shareName)" : mountPoint) &&
         validationErrors.isEmpty
     }
     
@@ -151,17 +140,8 @@ struct EditVolumeView: View {
         }
     }
     
-    private func validateMountPoint() {
-        let finalPath = mountPoint.isEmpty ? "~/SMBMounts/\(shareName)" : mountPoint
-        if !InputValidator.validateMountPoint(finalPath) {
-            validationErrors["mountPoint"] = "Mount point must be within home directory (~/...)"
-        } else {
-            validationErrors.removeValue(forKey: "mountPoint")
-        }
-    }
-    
     private func saveChanges() {
-        let finalMountPoint = InputValidator.sanitizeMountPoint(mountPoint, defaultShareName: shareName)
+        let finalMountPoint = "~/\(shareName)"
         
         var updatedMount = mount
         updatedMount.name = name
@@ -180,4 +160,5 @@ struct EditVolumeView: View {
         mountManager.deleteMount(mount)
         isPresented = false
     }
+
 }

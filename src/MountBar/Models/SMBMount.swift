@@ -98,16 +98,6 @@ struct InputValidator {
         let expandedPath = NSString(string: path).expandingTildeInPath
         let resolvedPath = (expandedPath as NSString).resolvingSymlinksInPath
         
-        guard let homeDir = FileManager.default.homeDirectoryForCurrentUser.path as String? else {
-            return false
-        }
-        let resolvedHome = (homeDir as NSString).resolvingSymlinksInPath
-        
-        // Must resolve to be within home directory
-        guard resolvedPath.hasPrefix(resolvedHome) else {
-            return false
-        }
-        
         // Reject hidden files/dirs in path (starting with .)
         let pathComponents = resolvedPath.components(separatedBy: "/")
         for component in pathComponents {

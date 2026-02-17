@@ -26,7 +26,7 @@ fi
 
 # Clean and build release version
 echo "📦 Building release version..."
-xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build
+xcodebuild -project MountBar.xcodeproj -scheme MountBar -configuration Release clean build CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed!"

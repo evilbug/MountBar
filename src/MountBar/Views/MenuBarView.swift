@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct MenuBarView: View {
-    @StateObject private var mountManager = SMBMountManager()
-    @StateObject private var mountDaemon = MountDaemon.shared
+    @ObservedObject var mountManager: SMBMountManager
+    @ObservedObject var mountDaemon: MountDaemon
     @State private var showingAddVolume = false
     @State private var showingEditVolume = false
     @State private var editingMountId: UUID?
@@ -91,9 +91,6 @@ struct MenuBarView: View {
         } message: {
             Text(errorMessage)
         }
-        .onAppear {
-            mountDaemon.start(with: mountManager)
-        }
         .onDisappear {
             mountDaemon.stop()
         }
@@ -125,10 +122,6 @@ struct MountItemView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
-                    Text(mount.mountPoint)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
                 }
                 
                 Spacer()
@@ -143,8 +136,8 @@ struct MountItemView: View {
             HStack(spacing: 8) {
                 if mount.status == .mounted {
                     Button("Open Folder") {
-                        let expandedPath = NSString(string: mount.mountPoint).expandingTildeInPath
-                        NSWorkspace.shared.open(URL(fileURLWithPath: expandedPath))
+                        let path = "/Volumes/\(mount.shareName)"
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)

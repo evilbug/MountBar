@@ -43,7 +43,9 @@ class PasswordManager {
     
     func getPassword(from mount: SMBMount) -> String? {
         if let encrypted = mount.encryptedPassword {
-            return decryptPassword(encrypted)
+            if let decrypted = decryptPassword(encrypted) {
+                return decrypted
+            }
         }
         
         if let legacy = getLegacyKeychainPassword(for: mount.id.uuidString) {
